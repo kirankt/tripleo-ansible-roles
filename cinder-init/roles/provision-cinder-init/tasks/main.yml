@@ -1,0 +1,51 @@
+- name: Create Cinder Database
+  k8s_v1_job:
+    name: cinder-create-db
+    namespace: '{{ namespace }}'
+    restart_policy: OnFailure
+    containers:
+    - name: cinder-create-db
+      image: tripleoupstream/centos-binary-kolla-toolbox:latest
+      image_pull_policy: IfNotPresent
+      command: ["sh", "-c"]
+      args:
+        - ansible localhost -m mysql_db -a
+          "login_host='mariadb'
+           login_port='3306'
+           login_user='root'
+           login_password='$DATABASE_PASSWORD'
+           name='cinder'"
+      env:
+        - name: DATABASE_PASSWORD
+          value: "mysqlpass"
+        - name: "TZ"
+          value: "UTC"
+
+- name: Create Cinder User in the database
+  k8s_v1_job:
+    name: cinder-create-user
+    namespace: '{{ namespace }}'
+    restart_policy: OnFailure
+    containers:
+    - name: cinder-create-db
+      image: tripleoupstream/centos-binary-kolla-toolbox:latest
+      image_pull_policy: IfNotPresent
+      command: ["sh", "-c"]
+      args:
+        - ansible localhost -m mysql_user -a
+          "login_host='mariadb'
+           login_port='3306'
+           login_user='root'
+           login_password='$DATABASE_PASSWORD'
+           name='cinder'
+           password='$CINDER_DATABASE_PASSWORD'
+           host='%'
+           priv='cinder.*:ALL'
+           append_privs='yes'"
+      env:
+        - name: CINDER_DATABASE_PASSWORD
+          value: "cinderpass"
+        - name: DATABASE_PASSWORD
+          value: "mysqlpass"
+        - name: "TZ"
+          value: "UTC"

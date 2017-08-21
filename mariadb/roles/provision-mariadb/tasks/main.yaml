@@ -1,0 +1,142 @@
+- name: Create mariadb configmaps 
+  ignore_errors: yes
+  k8s_v1_config_map:
+    name: mariadb 
+    namespace: '{{ namespace }}' 
+    state: present
+    labels:
+      service: mariadb 
+    data:
+      kolla-config: |
+        {
+            "command": "/usr/bin/mysqld_safe",
+            "config_files": []
+        }
+      server-cnf: |
+        [mysqld]
+        pid-file=/var/lib/mysql/mariadb.pid
+
+- name: Create Mariadb PVC
+  ignore_errors: yes
+  k8s_v1_persistent_volume_claim:
+    name: mariadb
+    namespace: '{{ namespace }}'
+    state: present
+    labels:
+      app: mariadb
+    access_modes:
+    - ReadWriteOnce
+    resources_requests:
+      storage: 1Gi
+
+- name: Create mariadb service 
+  k8s_v1_service:
+    name: mariadb
+    namespace: '{{ namespace }}' 
+    state: present
+    ports:
+      - port: 3306 
+        name: mariadb
+    selector:
+      app: mariadb 
+    labels:
+      app: mariadb 
+    annotations:
+      service.alpha.kubernetes.io/tolerate-unready-endpoints: "false"
+  register: create_service 
+
+- name: Create mariadb deployment 
+  k8s_v1beta1_stateful_set:
+    name: mariadb
+    namespace: '{{ namespace }}' 
+    state: present 
+    spec_service_name: mariadb
+    spec_template_metadata_name: mariadb
+    spec_template_metadata_labels:
+      app: mariadb 
+      galera: enabled
+    containers:
+      - name: mariadb 
+        image: '{{ image }}'
+        ports:
+        - container_port: 3306 
+        env:
+        - name: TZ
+          value: UTC
+        - name: KOLLA_CONFIG_STRATEGY
+          value: COPY_ALWAYS
+        - name: KOLLA_KUBERNETES
+          value: ""
+        - name: DB_ROOT_PASSWORD
+          value: mysqlpass
+        volume_mounts:
+        - name: kolla-config
+          mountPath: /var/lib/kolla/config_files/
+        - name: mariadb-config
+          mountPath: /etc/my.cnf.d
+        - name: mariadb-pvc
+          mountPath: /var/lib/mysql
+    replicas: 1
+    spec_template_metadata_annotations:
+      pod.beta.kubernetes.io/init-containers: '[
+          {
+            "name": "bootstrap",
+            "image": "tripleoupstream/centos-binary-mariadb",
+            "env": [
+              {
+                "name": "TZ",
+                "value": "UTC"
+              },
+              {
+                "name": "KOLLA_KUBERNETES",
+                "value": ""
+              },
+              {
+                "name": "KOLLA_BOOTSTRAP",
+                "value": ""
+              },
+              {
+                "name": "KOLLA_CONFIG_STRATEGY",
+                "value": "COPY_ALWAYS"
+              },
+              {
+                "name": "DB_ROOT_PASSWORD",
+                "value": "mysqlpass"
+              }
+            ],
+            "volumeMounts": [
+              {
+                "name": "kolla-config",
+                "mountPath": "/var/lib/kolla/config_files/"
+              },
+              {
+                "name": "mariadb-config",
+                "mountPath": "/etc/my.cnf.d"
+              },
+              {
+                "name": "mariadb-pvc",
+                "mountPath": "/var/lib/mysql"
+              }
+            ]
+          }
+        ]'
+    volumes:
+      - name: mariadb-pvc
+        persistentVolumeClaim:
+          claimName: mariadb
+      - name: kolla-config
+        config_map:
+          name: mariadb
+          items:
+            - key: kolla-config
+              path: config.json
+      - name: mariadb-config
+        config_map:
+          name: mariadb
+          items:
+            - key: server-cnf 
+              path: server.cnf
+        
+  register: create_deployment
+  tags:
+    - statefulset

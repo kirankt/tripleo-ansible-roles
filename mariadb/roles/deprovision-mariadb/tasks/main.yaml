@@ -1,0 +1,19 @@
+- name: Delete mariadb deployment 
+  k8s_v1beta1_stateful_set:
+    name: mariadb
+    namespace: "{{ namespace }}"
+    state: absent 
+
+- name: Delete mariadb service 
+  k8s_v1_service:
+    name: mariadb
+    namespace: "{{ namespace }}"
+    state: absent 
+
+- name: Delete mariadb configmap 
+  ignore_errors: yes
+  k8s_v1_config_map:
+    name: mariadb
+    namespace: "{{ namespace }}"
+    state: absent
+

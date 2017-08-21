@@ -1,0 +1,53 @@
+- name: Create LVM Loopback Device and LV
+  k8s_v1_job:
+    name: cinder-lvm-init
+    namespace: '{{ namespace }}'
+    restart_policy: OnFailure
+    service_account_name: openstack-priv
+    node_selector:
+      controller: "true"
+    containers:
+    - name: cinder-lvm-init
+      image: centos:latest
+      image_pull_policy: IfNotPresent
+      volumeMounts:
+        - mountPath: /etc/localtime
+          name: host-etc-localtime
+          readOnly: true
+        - mountPath: /run
+          name: run
+        - mountPath: /dev
+          name: dev
+        - mountPath: /sys/fs/cgroup
+          name: sys-fs-cgroup
+        - mountPath: /lib/modules
+          name: lib-modules
+        - mountPath: /var/lib
+          name: cinder-volumes
+      command: ["sh", "-c"]
+      args: 
+        - > 
+            mkdir /var/lib/cinder && chown cinder:kolla /var/lib/cinder
+            dd if=/dev/zero of=/var/lib/cinder/cinder-volumes bs=1 count=0 seek=10280M &&
+            if ! losetup /dev/loop3; then losetup /dev/loop2 /var/lib/cinder/cinder-volumes ;  fi &&
+            if ! pvdisplay | grep cinder-volumes; then pvcreate /dev/loop3; fi &&
+            if ! vgdisplay | grep cinder-volumes; then vgcreate cinder-volumes /dev/loop2 ; fi 
+    volumes:        
+      - name: host-etc-localtime
+        hostPath:
+          path: /etc/localtime
+      - name: cinder-volumes
+        hostPath:
+          path: /var/lib
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: run
+        hostPath:
+          path: /run
+      - name: dev
+        hostPath:
+            path: /dev
+      - name: sys-fs-cgroup
+        hostPath:
+          path: /sys/fs/cgroup

@@ -1,0 +1,184 @@
+
+- name: Create cinder configmaps
+  ignore_errors: yes
+  k8s_v1_config_map:
+    name: cinder-api
+    namespace: '{{ namespace }}'
+    state: present
+    verify_ssl: false
+    labels:
+      app: cinder-api
+      service: cinder-api
+    data:
+      config.json: |
+        {
+            "command": "httpd -DFOREGROUND",
+            "config_files": [
+                {
+                    "source": "/var/lib/kolla/config_files/cinder.conf",
+                    "dest": "/etc/cinder/cinder.conf",
+                    "owner": "cinder",
+                    "perm": "0600"
+                },
+                {
+                    "source": "/var/lib/kolla/config_files/cinder-wsgi.conf",
+                    "dest": "/etc/httpd/conf.d/cinder-wsgi.conf",
+                    "owner": "cinder",
+                    "perm": "0600"
+                },
+                {
+                    "source": "/var/lib/kolla/config_files/policy.json",
+                    "dest": "/etc/cinder/policy.json",
+                    "owner": "cinder",
+                    "perm": "0600",
+                    "optional": true
+                }
+            ],
+            "permissions": [
+                {
+                    "path": "/var/lib/cinder",
+                    "owner": "cinder:cinder",
+                    "recurse": true
+                },
+                {
+                    "path": "/var/log/kolla/cinder",
+            "owner": "cinder:cinder",
+            "recurse": true
+                }
+            ]
+        }
+
+      cinder-wsgi.conf: |
+        Listen 0.0.0.0:8776
+
+        TraceEnable off
+
+        <VirtualHost *:8776>
+            WSGIDaemonProcess cinder-api processes=5 threads=1 user=cinder group=cinder display-name=%{GROUP} python-path=/usr/lib/python2.7/site-packages
+            WSGIProcessGroup cinder-api
+            WSGIScriptAlias / /var/www/cgi-bin/cinder/cinder-wsgi
+            WSGIApplicationGroup %{GLOBAL}
+            WSGIPassAuthorization On
+            <IfVersion >= 2.4>
+              ErrorLogFormat "%{cu}t %M"
+            </IfVersion>
+            ErrorLog /var/log/kolla/cinder/cinder-api.log
+            LogFormat "%{X-Forwarded-For}i %l %u %t \"%r\" %>s %b %D \"%{Referer}i\" \"%{User-Agent}i\"" logformat
+            CustomLog /var/log/kolla/cinder/cinder-api-access.log logformat
+        </VirtualHost>
+
+      cinder.conf: |
+        [DEFAULT]
+        glance_api_servers=none
+        glance_api_version=2
+        enable_v3_api=True
+        storage_availability_zone=nova
+        default_availability_zone=nova
+        auth_strategy=noauth
+        enabled_backends=tripleo_iscsi
+        nova_catalog_info=compute:nova:internalURL
+        nova_catalog_admin_info=compute:nova:adminURL
+        scheduler_driver=cinder.scheduler.filter_scheduler.FilterScheduler
+        osapi_volume_listen=tunga.internalapi.undercloud
+        osapi_volume_workers=2
+        log_dir=/var/log/cinder
+        transport_url=rabbit://guest:ZMCjt4emDMGppGDzevNG3zBPB@rabbitmq:5672/?ssl=0
+        rpc_backend=rabbit
+        control_exchange=openstack
+        api_paste_config=/etc/cinder/api-paste.ini
+
+        [database]
+        connection=mysql+pymysql://cinder:cinderpass@mariadb:3306/cinder
+        max_retries=-1
+        db_max_retries=-1
+
+        [oslo_concurrency]
+        lock_path=/var/lib/cinder/tmp
+
+        [oslo_messaging_notifications]
+        driver=messagingv2
+        transport_url=rabbit://guest:ZMCjt4emDMGppGDzevNG3zBPB@rabbitmq:5672/?ssl=0
+
+        [oslo_messaging_rabbit]
+        ssl=False
+        rabbit_port=5672
+        rabbit_userid=guest
+        rabbit_password=ZMCjt4emDMGppGDzevNG3zBPB
+        heartbeat_timeout_threshold=60
+
+        [oslo_middleware]
+        enable_proxy_headers_parsing=True
+
+        [oslo_policy]
+        policy_file=/etc/cinder/policy.json
+
+        [tripleo_iscsi]
+        volume_backend_name=tripleo_iscsi
+        volume_driver=cinder.volume.drivers.lvm.LVMVolumeDriver
+        iscsi_ip_address=iscsid
+        iscsi_helper=lioadm
+        volumes_dir=/var/lib/cinder/volumes
+        iscsi_protocol=iscsi
+
+- name: create deployment config
+  openshift_v1_deployment_config:
+    name: cinder-api
+    namespace: '{{ namespace }}'
+    labels:
+      app: cinder-api
+      service: cinder-api
+    replicas: 1
+    selector:
+      app: cinder-api
+      service: cinder-api
+    spec_template_metadata_labels:
+      app: cinder-api
+      service: cinder-api
+    containers:
+    - env:
+      image: tripleoupstream/centos-binary-cinder-api:latest
+      name: cinder-api
+      ports:
+        - container_port: 8776
+          protocol: TCP
+      env:
+        - name: TZ
+          value: UTC
+        - name: KOLLA_CONFIG_STRATEGY
+          value: COPY_ALWAYS
+        - name: KOLLA_KUBERNETES
+          value: ""
+      volume_mounts:
+        - name: kolla-config
+          mountPath: /var/lib/kolla/config_files/
+    volumes:
+      - name: kolla-config
+        config_map:
+          name: cinder-api
+
+
+- name: create cinder-api service
+  k8s_v1_service:
+    name: cinder-api
+    namespace: '{{ namespace }}'
+    labels:
+      app: cinder-api
+      service: cinder-api
+    selector:
+      app: cinder-api
+      service: cinder-api
+    ports:
+      - name: cinder-api
+        port: 80
+        target_port: 80
+
+
+#- name: create cinder-api route
+#  openshift_v1_route:
+#    name: cinder-api
+#    namespace: '{{ namespace }}'
+#    spec_port_target_port: web
+#    labels:
+#      app: cinder-api
+#      service: cinder-api
+#    to_name: cinder-api
