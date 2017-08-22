@@ -19,8 +19,6 @@
         name: comm
   register: create-svc
 
-- debug: var=create-svc
-
 - name: create rabbitmq management service
   k8s_v1_service:
     name: rabbitmq-mgmt

@@ -46,7 +46,7 @@
         nova_catalog_info=compute:nova:internalURL
         nova_catalog_admin_info=compute:nova:adminURL
         scheduler_driver=cinder.scheduler.filter_scheduler.FilterScheduler
-        osapi_volume_listen=tunga.internalapi.undercloud
+        osapi_volume_listen=0.0.0.0
         osapi_volume_workers=2
         log_dir=/var/log/cinder
         transport_url=rabbit://guest:ZMCjt4emDMGppGDzevNG3zBPB@rabbitmq:5672/?ssl=0
@@ -84,26 +84,22 @@
         volume_driver=cinder.volume.drivers.lvm.LVMVolumeDriver
         iscsi_ip_address=iscsid
         iscsi_helper=lioadm
-        volumes_dir=/var/lib/cinder/volumes
+        volumes_dir=/var/lib/cinder/cinder-volumes
         iscsi_protocol=iscsi
 
-- name: create deployment config
-  openshift_v1_deployment_config:
+- name: create cinder-scheduler deployment
+  k8s_v1beta1_deployment:
     name: cinder-scheduler
     namespace: '{{ namespace }}'
     labels:
       app: cinder-scheduler
       service: cinder-scheduler
     replicas: 1
-    selector:
-      app: cinder-scheduler
-      service: cinder-scheduler
     spec_template_metadata_labels:
       app: cinder-scheduler
       service: cinder-scheduler
     containers:
-    - env:
-      image: tripleoupstream/centos-binary-cinder-scheduler:latest
+    - image: tripleoupstream/centos-binary-cinder-scheduler:latest
       name: cinder-scheduler
       env:
         - name: TZ

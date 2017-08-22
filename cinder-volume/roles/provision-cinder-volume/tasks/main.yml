@@ -1,0 +1,306 @@
+- name: Create cinder-volume configmap
+  ignore_errors: yes
+  k8s_v1_config_map:
+    name: cinder-volume
+    namespace: '{{ namespace }}'
+    state: present
+    verify_ssl: false
+    labels:
+      app: cinder-volume
+      service: cinder-volume
+    data:
+      config.json: |
+        {
+            "command": "/usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf --config-file /etc/cinder/cinder.conf",
+            "config_files": [
+                {
+                    "source": "/var/lib/kolla/config_files/cinder.conf",
+                    "dest": "/etc/cinder/cinder.conf",
+                    "owner": "cinder",
+                    "perm": "0600"
+                },
+                {
+                    "source": "/var/lib/kolla/config_files/policy.json",
+                    "dest": "/etc/cinder/policy.json",
+                    "owner": "cinder",
+                    "perm": "0600"
+                }
+            ]
+        }
+
+      cinder.conf: |
+        [DEFAULT]
+        glance_api_servers=none
+        glance_api_version=2
+        enable_v3_api=True
+        storage_availability_zone=nova
+        default_availability_zone=nova
+        auth_strategy=noauth
+        enabled_backends=tripleo_iscsi
+        nova_catalog_info=compute:nova:internalURL
+        nova_catalog_admin_info=compute:nova:adminURL
+        scheduler_driver=cinder.scheduler.filter_scheduler.FilterScheduler
+        osapi_volume_listen=0.0.0.0
+        osapi_volume_workers=2
+        log_dir=/var/log/cinder
+        transport_url=rabbit://guest:ZMCjt4emDMGppGDzevNG3zBPB@rabbitmq:5672/?ssl=0
+        rpc_backend=rabbit
+        control_exchange=openstack
+        api_paste_config=/etc/cinder/api-paste.ini
+
+        [database]
+        connection=mysql+pymysql://cinder:cinderpass@mariadb:3306/cinder
+        max_retries=-1
+        db_max_retries=-1
+
+        [oslo_concurrency]
+        lock_path=/var/lib/cinder/tmp
+
+        [oslo_messaging_notifications]
+        driver=messagingv2
+        transport_url=rabbit://guest:ZMCjt4emDMGppGDzevNG3zBPB@rabbitmq:5672/?ssl=0
+
+        [oslo_messaging_rabbit]
+        ssl=False
+        rabbit_port=5672
+        rabbit_userid=guest
+        rabbit_password=ZMCjt4emDMGppGDzevNG3zBPB
+        heartbeat_timeout_threshold=60
+
+        [oslo_middleware]
+        enable_proxy_headers_parsing=True
+
+        [oslo_policy]
+        policy_file=/etc/cinder/policy.json
+
+        [tripleo_iscsi]
+        volume_backend_name=tripleo_iscsi
+        volume_driver=cinder.volume.drivers.lvm.LVMVolumeDriver
+        iscsi_ip_address=iscsid
+        iscsi_helper=lioadm
+        volumes_dir=/var/lib/cinder/cinder-volumes
+        iscsi_protocol=iscsi
+
+      policy.json: |
+        {
+            "admin_or_owner":  "is_admin:True or (role:admin and is_admin_project:True) or  project_id:%(project_id)s",
+            "default": "rule:admin_or_owner",
+
+            "admin_api": "is_admin:True or (role:admin and is_admin_project:True)",
+
+            "volume:create": "",
+            "volume:create_from_image": "",
+            "volume:delete": "rule:admin_or_owner",
+            "volume:force_delete": "rule:admin_api",
+            "volume:get": "rule:admin_or_owner",
+            "volume:get_all": "rule:admin_or_owner",
+            "volume:get_volume_metadata": "rule:admin_or_owner",
+            "volume:create_volume_metadata": "rule:admin_or_owner",
+            "volume:delete_volume_metadata": "rule:admin_or_owner",
+            "volume:update_volume_metadata": "rule:admin_or_owner",
+            "volume:get_volume_admin_metadata": "rule:admin_api",
+            "volume:update_volume_admin_metadata": "rule:admin_api",
+            "volume:get_snapshot": "rule:admin_or_owner",
+            "volume:get_all_snapshots": "rule:admin_or_owner",
+            "volume:create_snapshot": "rule:admin_or_owner",
+            "volume:delete_snapshot": "rule:admin_or_owner",
+            "volume:update_snapshot": "rule:admin_or_owner",
+            "volume:get_snapshot_metadata": "rule:admin_or_owner",
+            "volume:delete_snapshot_metadata": "rule:admin_or_owner",
+            "volume:update_snapshot_metadata": "rule:admin_or_owner",
+            "volume:extend": "rule:admin_or_owner",
+            "volume:extend_attached_volume": "rule:admin_or_owner",
+            "volume:update_readonly_flag": "rule:admin_or_owner",
+            "volume:retype": "rule:admin_or_owner",
+            "volume:update": "rule:admin_or_owner",
+            "volume:revert_to_snapshot": "rule:admin_or_owner",
+
+            "volume_extension:types_manage": "rule:admin_api",
+            "volume_extension:types_extra_specs:create": "rule:admin_api",
+            "volume_extension:types_extra_specs:delete": "rule:admin_api",
+            "volume_extension:types_extra_specs:index": "rule:admin_api",
+            "volume_extension:types_extra_specs:show": "rule:admin_api",
+            "volume_extension:types_extra_specs:update": "rule:admin_api",
+            "volume_extension:access_types_qos_specs_id": "rule:admin_api",
+            "volume_extension:access_types_extra_specs": "rule:admin_api",
+            "volume_extension:volume_type_access": "rule:admin_or_owner",
+            "volume_extension:volume_type_access:addProjectAccess": "rule:admin_api",
+            "volume_extension:volume_type_access:removeProjectAccess": "rule:admin_api",
+            "volume_extension:volume_type_encryption": "rule:admin_api",
+            "volume_extension:volume_encryption_metadata": "rule:admin_or_owner",
+            "volume_extension:extended_snapshot_attributes": "rule:admin_or_owner",
+            "volume_extension:volume_image_metadata": "rule:admin_or_owner",
+
+            "volume_extension:qos_specs_manage:create": "rule:admin_api",
+            "volume_extension:qos_specs_manage:get": "rule:admin_api",
+            "volume_extension:qos_specs_manage:get_all": "rule:admin_api",
+            "volume_extension:qos_specs_manage:update": "rule:admin_api",
+            "volume_extension:qos_specs_manage:delete": "rule:admin_api",
+
+            "volume_extension:quotas:show": "",
+            "volume_extension:quotas:update": "rule:admin_api",
+            "volume_extension:quotas:delete": "rule:admin_api",
+            "volume_extension:quota_classes": "rule:admin_api",
+            "volume_extension:quota_classes:validate_setup_for_nested_quota_use": "rule:admin_api",
+
+            "volume_extension:volume_admin_actions:reset_status": "rule:admin_api",
+            "volume_extension:snapshot_admin_actions:reset_status": "rule:admin_api",
+            "volume_extension:backup_admin_actions:reset_status": "rule:admin_api",
+            "volume_extension:volume_admin_actions:force_delete": "rule:admin_api",
+            "volume_extension:volume_admin_actions:force_detach": "rule:admin_api",
+            "volume_extension:snapshot_admin_actions:force_delete": "rule:admin_api",
+            "volume_extension:backup_admin_actions:force_delete": "rule:admin_api",
+            "volume_extension:volume_admin_actions:migrate_volume": "rule:admin_api",
+            "volume_extension:volume_admin_actions:migrate_volume_completion": "rule:admin_api",
+
+            "volume_extension:volume_actions:upload_public": "rule:admin_api",
+            "volume_extension:volume_actions:upload_image": "rule:admin_or_owner",
+
+            "volume_extension:volume_host_attribute": "rule:admin_api",
+            "volume_extension:volume_tenant_attribute": "rule:admin_or_owner",
+            "volume_extension:volume_mig_status_attribute": "rule:admin_api",
+            "volume_extension:hosts": "rule:admin_api",
+            "volume_extension:services:index": "rule:admin_api",
+            "volume_extension:services:update" : "rule:admin_api",
+
+            "volume_extension:volume_manage": "rule:admin_api",
+            "volume_extension:volume_unmanage": "rule:admin_api",
+            "volume_extension:list_manageable": "rule:admin_api",
+
+            "volume_extension:capabilities": "rule:admin_api",
+
+            "volume:create_transfer": "rule:admin_or_owner",
+            "volume:accept_transfer": "",
+            "volume:delete_transfer": "rule:admin_or_owner",
+            "volume:get_transfer": "rule:admin_or_owner",
+            "volume:get_all_transfers": "rule:admin_or_owner",
+
+            "volume:failover_host": "rule:admin_api",
+            "volume:freeze_host": "rule:admin_api",
+            "volume:thaw_host": "rule:admin_api",
+
+            "backup:create" : "",
+            "backup:delete": "rule:admin_or_owner",
+            "backup:get": "rule:admin_or_owner",
+            "backup:get_all": "rule:admin_or_owner",
+            "backup:restore": "rule:admin_or_owner",
+            "backup:backup-import": "rule:admin_api",
+            "backup:backup-export": "rule:admin_api",
+            "backup:update": "rule:admin_or_owner",
+            "backup:backup_project_attribute": "rule:admin_api",
+
+            "volume:attachment_create": "",
+            "volume:attachment_update": "rule:admin_or_owner",
+            "volume:attachment_delete": "rule:admin_or_owner",
+
+            "snapshot_extension:snapshot_actions:update_snapshot_status": "",
+            "snapshot_extension:snapshot_manage": "rule:admin_api",
+            "snapshot_extension:snapshot_unmanage": "rule:admin_api",
+            "snapshot_extension:list_manageable": "rule:admin_api",
+
+            "consistencygroup:create" : "group:nobody",
+            "consistencygroup:delete": "group:nobody",
+            "consistencygroup:update": "group:nobody",
+            "consistencygroup:get": "group:nobody",
+            "consistencygroup:get_all": "group:nobody",
+
+            "consistencygroup:create_cgsnapshot" : "group:nobody",
+            "consistencygroup:delete_cgsnapshot": "group:nobody",
+            "consistencygroup:get_cgsnapshot": "group:nobody",
+            "consistencygroup:get_all_cgsnapshots": "group:nobody",
+
+            "group:group_types_manage": "rule:admin_api",
+            "group:group_types_specs": "rule:admin_api",
+            "group:access_group_types_specs": "rule:admin_api",
+            "group:group_type_access": "rule:admin_or_owner",
+
+            "group:create" : "",
+            "group:delete": "rule:admin_or_owner",
+            "group:update": "rule:admin_or_owner",
+            "group:get": "rule:admin_or_owner",
+            "group:get_all": "rule:admin_or_owner",
+
+            "group:create_group_snapshot": "",
+            "group:delete_group_snapshot": "rule:admin_or_owner",
+            "group:update_group_snapshot": "rule:admin_or_owner",
+            "group:get_group_snapshot": "rule:admin_or_owner",
+            "group:get_all_group_snapshots": "rule:admin_or_owner",
+            "group:reset_group_snapshot_status":"rule:admin_api",
+            "group:reset_status":"rule:admin_api",
+
+            "group:enable_replication": "rule:admin_or_owner",
+            "group:disable_replication": "rule:admin_or_owner",
+            "group:failover_replication": "rule:admin_or_owner",
+            "group:list_replication_targets": "rule:admin_or_owner",
+
+            "scheduler_extension:scheduler_stats:get_pools" : "rule:admin_api",
+            "message:delete": "rule:admin_or_owner",
+            "message:get": "rule:admin_or_owner",
+            "message:get_all": "rule:admin_or_owner",
+
+            "clusters:get": "rule:admin_api",
+            "clusters:get_all": "rule:admin_api",
+            "clusters:update": "rule:admin_api",
+
+            "workers:cleanup": "rule:admin_api"
+        }
+
+
+- name: Create Cinder Volume Deployment
+  k8s_v1beta1_deployment:
+    name: cinder-volume
+    namespace: '{{ namespace }}'
+    service_account_name: openstack-priv
+    node_selector:
+      controller: "true"
+    labels:
+      app: cinder-volume
+      service: cinder-volume
+    replicas: 1
+    spec_template_metadata_labels:
+      app: cinder-volume
+      service: cinder-volume
+    containers:
+    - name: cinder-volume
+      image: tripleoupstream/centos-binary-cinder-volume:latest
+      image_pull_policy: IfNotPresent
+      volumeMounts:
+        - mountPath: /etc/localtime
+          name: host-etc-localtime
+          readOnly: true
+        - mountPath: /run
+          name: run
+        - mountPath: /dev
+          name: dev
+        - mountPath: /lib/modules
+          name: lib-modules
+        - mountPath: /var/lib/cinder
+          name: cinder-volumes
+        - name: kolla-config
+          mountPath: /var/lib/kolla/config_files/
+      env:
+        - name: TZ
+          value: UTC
+        - name: KOLLA_CONFIG_STRATEGY
+          value: COPY_ALWAYS
+        - name: KOLLA_KUBERNETES
+          value: ""
+    volumes:
+      - name: kolla-config
+        config_map:
+          name: cinder-volume
+      - name: host-etc-localtime
+        hostPath:
+          path: /etc/localtime
+      - name: cinder-volumes
+        hostPath:
+          path: /var/lib/cinder
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: run
+        hostPath:
+          path: /run
+      - name: dev
+        hostPath:
+            path: /dev

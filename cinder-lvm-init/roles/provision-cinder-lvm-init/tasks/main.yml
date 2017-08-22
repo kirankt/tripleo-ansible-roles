@@ -8,7 +8,7 @@
       controller: "true"
     containers:
     - name: cinder-lvm-init
-      image: centos:latest
+      image: tripleoupstream/centos-binary-cinder-volume:latest
       image_pull_policy: IfNotPresent
       volumeMounts:
         - mountPath: /etc/localtime
@@ -22,12 +22,11 @@
           name: sys-fs-cgroup
         - mountPath: /lib/modules
           name: lib-modules
-        - mountPath: /var/lib
+        - mountPath: /var/lib/cinder
           name: cinder-volumes
       command: ["sh", "-c"]
       args: 
         - > 
-            mkdir /var/lib/cinder && chown cinder:kolla /var/lib/cinder
             dd if=/dev/zero of=/var/lib/cinder/cinder-volumes bs=1 count=0 seek=10280M &&
             if ! losetup /dev/loop3; then losetup /dev/loop2 /var/lib/cinder/cinder-volumes ;  fi &&
             if ! pvdisplay | grep cinder-volumes; then pvcreate /dev/loop3; fi &&
@@ -38,7 +37,7 @@
           path: /etc/localtime
       - name: cinder-volumes
         hostPath:
-          path: /var/lib
+          path: /var/lib/cinder
       - name: lib-modules
         hostPath:
           path: /lib/modules
